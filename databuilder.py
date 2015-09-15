@@ -1,6 +1,18 @@
+
 """
 Reads Image data from train/test folders and creates .pkl objects for models to use later
 """
+
+# images
+from PIL import Image
+from skimage.filters import threshold_otsu
+from skimage.transform import resize
+
+# utilities
+import pandas as pd
+import numpy as np
+import random
+import pickle
 
 def get_img(i, size):
     """
@@ -15,7 +27,7 @@ def get_img(i, size):
     binary = image > thresh
     return binary
 
-if __name__=='main':
+if __name__=='__main__':
 
     print "Loading Data..."
     

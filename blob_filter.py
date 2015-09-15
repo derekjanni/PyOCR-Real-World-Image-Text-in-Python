@@ -6,24 +6,11 @@ from lasagne.nonlinearities import softmax
 from lasagne.updates import nesterov_momentum, sgd
 from nolearn.lasagne import NeuralNet
 
-# sklearn models                                                                                                                                                             
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import precision_score
-from sklearn.metrics import recall_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import roc_curve
-from sklearn.metrics import auc
+# sklearn
 from sklearn.metrics import classification_report
-from sklearn.learning_curve import learning_curve
-from sklearn.cross_validation import cross_val_score
-from sklearn.cross_validation import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-# graphs                                                                                                                                                                                             
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# images                                                                                                                                                                                             
+# images
 from scipy.ndimage import convolve, rotate
 from skimage.feature import hog
 from skimage import draw, data, io, segmentation, color, exposure
@@ -43,6 +30,9 @@ import math
 import glob
 
 def load_data(size):
+    """
+    Loads data from /chars and /notChars to train binary Classifier
+    """
     char_files = glob.glob("/users/derekjanni/pyocr/chars/*")
     non_files = glob.glob("/users/derekjanni/pyocr/notChars/*")
     # pre-process character data
@@ -98,7 +88,7 @@ Y_train, Y_test = Y[:18000], Y[18000:]
 print 'Shape'
 print X.shape, Y.shape
 
-# define and evaluate model
+# define and Neural Net model
 from lasagne.layers import DenseLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DropoutLayer
@@ -110,23 +100,22 @@ from lasagne import layers
 model = NeuralNet(
     layers=[
         ('input', layers.InputLayer),
-        ('conv1', layers.Conv2DLayer),
-        ('pool1', layers.MaxPool2DLayer),
-        ('conv2', layers.Conv2DLayer),
-        ('pool2', layers.MaxPool2DLayer),
-#        ('conv3', layers.Conv2DLayer),
-#        ('pool3', layers.MaxPool2DLayer),
+#        ('conv1', layers.Conv2DLayer),
+#        ('pool1', layers.MaxPool2DLayer),
+#        ('conv2', layers.Conv2DLayer),
+#        ('pool2', layers.MaxPool2DLayer),
         ('hidden4', layers.DenseLayer),
+        ('drop0', layers.DropoutLayer),
         ('hidden5', layers.DenseLayer),
         ('output', layers.DenseLayer),
         ],
 
     input_shape = (None, 1, 50, 50),
-    conv1_num_filters=32, conv1_filter_size=(4, 4), pool1_pool_size=(4, 4),
-    conv2_num_filters=64, conv2_filter_size=(4, 4), pool2_pool_size=(4, 4),
-#    conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
-    hidden4_num_units=500,
-    hidden5_num_units=500,
+#    conv1_num_filters=32, conv1_filter_size=(2, 2), pool1_pool_size=(2, 2),
+#    conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
+    hidden4_num_units=1000,
+    drop0_p = 0.5,
+    hidden5_num_units=1000,
     output_num_units=2, output_nonlinearity=softmax,
 
     update=nesterov_momentum,
@@ -147,5 +136,5 @@ Y_pred = [1 - i for i in Y_pred]
 # print clf report to see how well we did
 print classification_report(Y_test, Y_pred)
 
-with open('charclf.pkl', 'w') as outfile:
+with open('blob_filter.pkl', 'w') as outfile:
     pickle.dump(model, outfile)
