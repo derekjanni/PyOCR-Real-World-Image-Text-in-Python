@@ -21,58 +21,57 @@ def process_img(img):
     binary = binary.reshape(-1, 1, 50, 50)
     return binary
 
-char2string_data = None
-model = None
-LE = None
-print 'Loading Models'
+if __name__=='__main__':
+    char2string_data = None
+    model = None
+    LE = None
+    print 'Loading Models'
 
-# Character Model
-with open('character_model.pkl', 'r') as infile:
-    model, LE = pickle.load(infile)
+    # OCR Model
+    with open('character_model.pkl', 'r') as infile:
+        model, LE = pickle.load(infile)
+        
+    # Image I/O
+    fname = sys.argv[1]
+    im = cv2.imread(fname)
+    ret,im = cv2.threshold(im,127,255,cv2.THRESH_BINARY)
+    
+    # Preprocessing
+    gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY) # grayscale                            
+    print np.std(gray)
+    _,thresh = cv2.threshold(gray,150,255,cv2.THRESH_BINARY_INV) # threshold                      
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3))
+    dilated = cv2.dilate(thresh,kernel,iterations = 5) # dilate     
 
-fname = sys.argv[1]
-im = cv2.imread(fname)
-ret,im = cv2.threshold(im,127,255,cv2.THRESH_BINARY)
+    #################      Now finding Contours         ###################                                                                                                                          
+    contours,hierarchy = cv2.findContours(dilated,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE) # see docs, CV_RETR_LIST
 
-gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY) # grayscale                            
-_,thresh = cv2.threshold(gray,150,255,cv2.THRESH_BINARY_INV) # threshold                                                                                                     
-kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3))
-dilated = cv2.dilate(thresh,kernel,iterations = 5) # dilate     
+    print 'Processing Images'
+    images_to_predict ={}
+    hierarchy = [tuple(i) for i in hierarchy[0]]
+    dictionary = dict(zip(hierarchy, contours))
+    for key in dictionary:
+        if cv2.contourArea(dictionary[key])> 400:
+            [x,y,w,h] = cv2.boundingRect(dictionary[key])
+            if w > 20 and h > 20 and key[0] > 0:
+                # made to block out small contours which could be mistaken for images
+                try:
+                    subimg = process_img(im[y-15:y+h+15, x-15:x+w+15])
+                    images_to_predict[x,y]= subimg
+                except: 
+                    # The only exception that happens is when a character is too close (within 5px) of edge
+                    # We'll assume these characters are no good anyway
+                    pass
+                
+    images_to_predict = OrderedDict(sorted(images_to_predict.items(), key=lambda x: x[0][0], reverse=False))
 
-#################      Now finding Contours         ###################                                                                                                                          
-contours,hierarchy = cv2.findContours(dilated,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE) # see docs, CV_RETR_LIST
+    print "Generating Output:"
+    rawstring = ''
+    for image in images_to_predict.values():
+        rawstring += str(LE.inverse_transform(model.predict(image)[0])) # predict each image
 
-print 'Processing Images'
-images_to_predict ={}
-hierarchy = [tuple(i) for i in hierarchy[0]]
-dictionary = dict(zip(hierarchy, contours))
-for key in dictionary:
-    if cv2.contourArea(dictionary[key])> 100:
-        [x,y,w,h] = cv2.boundingRect(dictionary[key])
-        if  w > 20 and h > 20 and key[0] > 0:
-            # made to block out small contours which could be mistaken for images
-            try:
-                subimg = process_img(im[y-15:y+h+15, x-15:x+w+15])
-                #if char_clf_model.predict(subimg)[0]==0:
-                images_to_predict[x,y]= subimg
-            except: 
-                # The only exception that happens is when a character is too close (within 5px) of edge
-                # We'll assume these characters are no good anyway
-                pass
-            
-images_to_predict = OrderedDict(sorted(images_to_predict.items(), key=lambda x: x[0][0], reverse=False))
+    print rawstring
 
-for image in images_to_predict.values():
-    cv2.imshow('image',image[0][0])
-    key = cv2.waitKey(0)
+    print "Improved Guess:"
 
-print "Generating Output:"
-rawstring = ''
-for image in images_to_predict.values():
-    rawstring += str(LE.inverse_transform(model.predict(image)[0])) # predict each image
-
-print rawstring
-
-print "Improved Guess:"
-
-print didYouMean.didYouMean(rawstring)
+    print didYouMean.didYouMean(rawstring)

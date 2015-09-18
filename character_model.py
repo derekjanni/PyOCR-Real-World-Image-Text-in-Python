@@ -1,5 +1,12 @@
 # neural net 
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from lasagne.layers import DenseLayer
+from lasagne.layers import InputLayer
+from lasagne.layers import DropoutLayer
+from lasagne.nonlinearities import softmax, sigmoid, tanh
+from lasagne.updates import nesterov_momentum
+from nolearn.lasagne import NeuralNet
+from lasagne import layers
 
 # sklearn metrics
 from sklearn.metrics import accuracy_score
@@ -35,119 +42,67 @@ def get_test_img(i, size):
     binary = image > thresh
     return binary
 
-def nudge_dataset(X, Y):
-    """                                                                                                                                                                        
-    This produces a dataset 5 times bigger than the original one,                                                                                                              
-    by moving the (size x size) images around by 1px to left, right, down, up                                                                                                  
-    """
+if __name__ == "__main__":
 
-    direction_vectors = [
-        [[0, 1, 0],
-         [0, 0, 0],
-         [0, 0, 0]],
+    LE = LabelEncoder()
+    X_train, Y_train, X_test, Y_test = None, None, None, None
 
-        [[0, 0, 0],
-         [1, 0, 0],
-         [0, 0, 0]],
+    # load data
+    with open('classifier_data.pkl', 'r') as infile:
+        data = pickle.load(infile)
+        X_train, Y_train, X_test, Y_test = data[0], data[1], data[2], data[3]
 
-        [[0, 0, 0],
-         [0, 0, 1],
-         [0, 0, 0]],
+    # make sure data is in right format, & properly label-encoded
+    X_train, X_test = X_train.astype(np.float32), X_test.astype(np.float32)
+    Y_train = LE.fit_transform(Y_train).astype(np.int32)
+    Y_test = LE.fit_transform(Y_test).astype(np.int32)
 
-        [[0, 0, 0],
-         [0, 0, 0],
-         [0, 1, 0]]]
+    model = NeuralNet(
+        layers=[
+            ('input', layers.InputLayer),
+            ('conv1', layers.Conv2DLayer),
+            ('pool1', layers.MaxPool2DLayer),
+            ('conv2', layers.Conv2DLayer),
+            ('pool2', layers.MaxPool2DLayer),
+            ('conv3', layers.Conv2DLayer),
+            ('pool3', layers.MaxPool2DLayer),
+            ('hidden4', layers.DenseLayer),
+            ('hidden5', layers.DenseLayer),
+            ('output', layers.DenseLayer),
+            ],
 
-    shift = lambda x, w: convolve(x.reshape(50,50), mode='constant',
-                                  weights=w)
-    #add nudged data                                                                                                                                                           
-    X = np.concatenate([X] +
-                       [np.apply_along_axis(shift, 1, X, vector)
-                        for vector in direction_vectors])
-    Y = np.concatenate([Y for _ in range(5)], axis=0)
-    return X, Y    
+        input_shape=(None, 1, 50, 50),
+        conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
+        conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
+        conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
+        hidden4_num_units=5000,
+        hidden5_num_units=5000,
+        output_num_units=62, 
+        output_nonlinearity=softmax,
 
-size = 50
-LE = LabelEncoder()
-X_train, Y_train, X_test, Y_test = None, None, None, None
+        update_learning_rate=0.01,
+        update_momentum=0.9,
 
-with open('classifier_data.pkl', 'r') as infile:
-    data = pickle.load(infile)
-    X_train, Y_train, X_test, Y_test = data[0], data[1], data[2], data[3]
+        regression=False,
+        max_epochs=20,
+        verbose=1,
+        )
 
-# make sure data is in right format, & properly label-encoded
-X_train, X_test = X_train.astype(np.float32), X_test.astype(np.float32)
-Y_train = LE.fit_transform(Y_train).astype(np.int32)
-Y_test = LE.fit_transform(Y_test).astype(np.int32)
+    print 'Fitting...'
+    model.fit(X_train, Y_train)
 
-X_train, Y_train = nudge_dataset(X_train, Y_train)
+    print "Predicting..."
+    Y_pred = model.predict(X_test)
+    Y_pred = LE.inverse_transform(Y_pred)
+    Y_test = LE.inverse_transform(Y_test)
 
+    y1 = LE.inverse_transform(model.predict(X_train))
+    y2 = LE.inverse_transform(Y_train)
+    print classification_report(y2, y1)
 
-#neural net & params
-from lasagne.layers import DenseLayer
-from lasagne.layers import InputLayer
-from lasagne.layers import DropoutLayer
-from lasagne.nonlinearities import softmax, sigmoid, tanh
-from lasagne.updates import nesterov_momentum
-from nolearn.lasagne import NeuralNet
-from lasagne import layers
+    print classification_report(Y_test, Y_pred)
 
-model = NeuralNet(
-    layers=[
-        ('input', layers.InputLayer),
-        ('conv1', layers.Conv2DLayer),
-        ('pool1', layers.MaxPool2DLayer),
-        ('conv2', layers.Conv2DLayer),
-        ('pool2', layers.MaxPool2DLayer),
-        ('conv3', layers.Conv2DLayer),
-        ('pool3', layers.MaxPool2DLayer),
-        ('hidden4', layers.DenseLayer),
-        ('hidden5', layers.DenseLayer),
-        ('output', layers.DenseLayer),
-        ],
+    with open('character_model.pkl', 'w') as outfile:
+        pickle.dump([model, LE], outfile)
 
-    input_shape=(None, 1, 50, 50),
-    conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
-    conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
-    conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
-    hidden4_num_units=1000,
-    hidden5_num_units=1000,
-    output_num_units=62, 
-    output_nonlinearity=softmax,
-
-    update_learning_rate=0.01,
-    update_momentum=0.9,
-
-    regression=False,
-    max_epochs=250,
-    verbose=1,
-    )
-
-print 'Fitting...'
-model.fit(X_train, Y_train)
-
-print "Predicting..."
-Y_pred = model.predict(X_test)
-Y_pred = LE.inverse_transform(Y_pred)
-Y_test = LE.inverse_transform(Y_test)
-
-y1 = LE.inverse_transform(model.predict(X_train))
-y2 = LE.inverse_transform(Y_train)
-print classification_report(y2, y1)
-
-print classification_report(Y_test, Y_pred)
-
-with open('character_model.pkl', 'w') as outfile:
-    pickle.dump([model, LE], outfile)
-
-'''
-X_sub = np.asarray([get_test_img(i, size) for i in range(6284, 12504)])
-Y_sub = model.predict(X_sub)
-
-print LE.inverse_transform(Y_sub[:20])
-# create submission output
-with open('submission.csv', 'w') as outfile:
-    outfile.write('ID,Class\n')
-    for i in range(len(Y_sub)):
-        outfile.write(str(i+6284) + ','+ Y_sub[i] +'\n')'''
-print "-------DONE-------"
+    print "-------DONE-------"
